@@ -17,6 +17,7 @@ from .schemas import (
     Member,
     MemberAdd,
     Priority,
+    Scope,
     SignupRequest,
     Status,
     Task,
@@ -122,28 +123,31 @@ def list_tasks(
     q: str | None = None,
     status: Status | None = None,
     priority: Priority | None = None,
+    scope: Scope = Scope.ALL,
+    team_id: int | None = None,
+    user: User = Depends(current_user),
 ) -> list[Task]:
-    """제목 검색(q)과 상태·우선순위 필터를 AND로 적용해 등록 순서로 반환한다."""
-    return store.list(q=q, status=status, priority=priority)
+    """볼 수 있는 할 일에 제목 검색(q), 상태·우선순위·범위 필터를 AND로 적용해 등록 순서로 반환한다."""
+    return store.list(user, q=q, status=status, priority=priority, scope=scope, team_id=team_id)
 
 
 @app.post("/api/tasks", status_code=status.HTTP_201_CREATED)
-def create_task(data: TaskCreate) -> Task:
-    """할 일을 등록한다. 상태는 항상 TODO로 시작한다."""
-    return store.create(data)
+def create_task(data: TaskCreate, user: User = Depends(current_user)) -> Task:
+    """할 일을 등록한다. 작성자는 로그인 사용자이고 상태는 항상 TODO로 시작한다."""
+    return store.create(data, user)
 
 
 @app.patch("/api/tasks/{task_id}")
-def update_task(task_id: int, data: TaskUpdate) -> Task:
-    """보낸 필드만 수정하고 나머지는 유지한다."""
-    task = store.update(task_id, data.changes())
+def update_task(task_id: int, data: TaskUpdate, user: User = Depends(current_user)) -> Task:
+    """보낸 필드만 수정하고 나머지는 유지한다. 공개 범위·팀은 작성자만 바꾼다."""
+    task = store.update(task_id, data.changes(), user)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TASK_NOT_FOUND)
     return task
 
 
 @app.delete("/api/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int) -> None:
-    """할 일을 삭제한다."""
-    if not store.delete(task_id):
+def delete_task(task_id: int, user: User = Depends(current_user)) -> None:
+    """할 일을 삭제한다. 작성자만 삭제할 수 있다."""
+    if not store.delete(task_id, user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TASK_NOT_FOUND)

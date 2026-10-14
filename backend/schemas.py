@@ -21,6 +21,33 @@ class Priority(str, Enum):
     LOW = "LOW"
 
 
+class Visibility(str, Enum):
+    PRIVATE = "PRIVATE"
+    TEAM = "TEAM"
+
+
+class Scope(str, Enum):
+    """GET /api/tasks 범위 필터."""
+
+    ALL = "all"
+    MINE = "mine"
+    TEAM = "team"
+
+
+class UserRef(BaseModel):
+    """다른 객체 안에 넣는 사용자 요약."""
+
+    id: int
+    username: str
+
+
+class TeamRef(BaseModel):
+    """할 일 안에 넣는 팀 요약."""
+
+    id: int
+    name: str
+
+
 def check_due_date_format(value: object) -> object:
     # "YYYY-MM-DD" 문자열만 허용하고 숫자·일시 문자열은 날짜로 변환하지 않는다.
     # 실제 존재하는 날짜인지는 이후 date 변환에서 확인한다.
@@ -49,9 +76,20 @@ class TaskCreate(BaseModel):
     description: str = Field(default="", max_length=DESCRIPTION_MAX_LENGTH)
     priority: Priority = Priority.NORMAL
     due_date: date | None = None
+    visibility: Visibility = Visibility.PRIVATE
+    team_id: int | None = None
 
     _check_due_date = field_validator("due_date", mode="before")(check_due_date_format)
     _check_title = field_validator("title")(check_title)
+
+    @model_validator(mode="after")
+    def check_team(self) -> "TaskCreate":
+        # 소속 팀인지는 저장할 때 서버가 확인한다.
+        if self.visibility == Visibility.TEAM and self.team_id is None:
+            raise ValueError("공개 범위가 TEAM이면 team_id가 필요합니다.")
+        if self.visibility == Visibility.PRIVATE and self.team_id is not None:
+            raise ValueError("공개 범위가 PRIVATE이면 team_id를 보낼 수 없습니다.")
+        return self
 
 
 class TaskUpdate(BaseModel):
@@ -65,6 +103,9 @@ class TaskUpdate(BaseModel):
     priority: Priority | None = None
     # null을 보내면 마감일을 지운다.
     due_date: date | None = None
+    # 공개 범위와 팀은 작성자만 바꾼다(권한은 서버에서 확인).
+    visibility: Visibility | None = None
+    team_id: int | None = None
 
     _check_due_date = field_validator("due_date", mode="before")(check_due_date_format)
     _check_title = field_validator("title")(check_title)
@@ -72,9 +113,16 @@ class TaskUpdate(BaseModel):
     @model_validator(mode="after")
     def reject_null(self) -> "TaskUpdate":
         # 생략은 허용하지만 due_date 외의 필드에 null을 보내면 거절한다.
-        for name in ("title", "description", "status", "priority"):
+        for name in ("title", "description", "status", "priority", "visibility"):
             if name in self.model_fields_set and getattr(self, name) is None:
                 raise ValueError(f"{name}에는 null을 보낼 수 없습니다.")
+        sent_team = "team_id" in self.model_fields_set
+        if self.visibility == Visibility.TEAM and self.team_id is None:
+            raise ValueError("공개 범위를 TEAM으로 바꾸려면 team_id가 필요합니다.")
+        if self.visibility == Visibility.PRIVATE and sent_team:
+            raise ValueError("공개 범위를 PRIVATE으로 바꿀 때는 team_id를 보낼 수 없습니다.")
+        if self.visibility is None and sent_team and self.team_id is None:
+            raise ValueError("팀을 없애려면 visibility를 PRIVATE으로 보내세요.")
         return self
 
     def changes(self) -> dict[str, object]:
@@ -92,6 +140,9 @@ class Task(BaseModel):
     priority: Priority
     due_date: date | None
     created_at: datetime
+    owner: UserRef
+    visibility: Visibility
+    team: TeamRef | None
 
 
 USERNAME_PATTERN = re.compile(r"[a-z0-9_]{3,30}")
@@ -165,13 +216,6 @@ class MemberAdd(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(max_length=100)
-
-
-class UserRef(BaseModel):
-    """다른 객체 안에 넣는 사용자 요약."""
-
-    id: int
-    username: str
 
 
 class Team(BaseModel):

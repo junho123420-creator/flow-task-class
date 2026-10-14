@@ -181,7 +181,7 @@ API 서버 상태를 확인한다. 로그인 필요 없음.
 
 - 여러 조건은 AND로 적용한다.
 - 응답 200: `Task` 배열. 조건에 맞는 항목이 없으면 `[]`.
-- 허용되지 않은 status·priority·scope 값, `scope=team`인데 team_id 없음은 422.
+- 허용되지 않은 status·priority·scope 값, `scope=team`인데 team_id 없음, `scope=team`이 아닌데 team_id 있음은 422.
 - 속하지 않은 팀의 team_id는 404 `{"detail": "팀을 찾을 수 없습니다."}`.
 
 ### POST /api/tasks  (T06, 공개 범위는 T19)
@@ -216,6 +216,7 @@ API 서버 상태를 확인한다. 로그인 필요 없음.
 - visibility·team_id: 작성자만 바꾼다. 작성자가 아니면 403 `{"detail": "작성자만 할 수 있습니다."}`.
   - `TEAM`으로 바꾸거나 팀을 바꾸면 내가 속한 팀의 team_id가 필요하다(없으면 422).
   - `PRIVATE`으로 바꾸면 team은 null이 된다. 이때 team_id 값을 함께 보내면 422.
+  - visibility 없이 team_id만 보내면 이미 TEAM인 할 일의 팀을 바꾼다. PRIVATE 할 일이거나 team_id가 null이면 422.
 - 응답 200: 수정된 `Task`. 볼 수 없거나 없는 id는 404, 검증 실패는 422.
 
 ### DELETE /api/tasks/{id}  (T07, 권한은 T19)
