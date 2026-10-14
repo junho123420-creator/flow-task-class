@@ -220,9 +220,18 @@
   B가 떠나도 B의 팀 할 일은 A에게 보임, 팀원 화면(탈퇴만, 추가·제거 없음), B 탈퇴, A 삭제, 로그아웃 시 필터 정리, 스크립트 오류 없음.
   회귀: T20 화면 시험 30건 통과. 화면 캡처로 팀 화면·할 일 배지 배치 확인.
   시험 계정·팀·할 일 삭제, users·teams·sessions 0행, tasks 기존 3행. 남은 오류: 없음.
-- [ ] T22: WSL 배포 반영(install-wsl.sh, install-wsl-web.sh)과 통합 확인.
+- [x] T22: WSL 배포 반영(install-wsl.sh, install-wsl-web.sh)과 통합 확인.
   확인: http://localhost/에서 세 계정 시나리오, App 재시작 후 데이터·로그인 유지, 8000은 API만 제공 유지.
   기존 작성자 없는 행 정리는 백업 후 사용자 확인을 받아 진행.
+  기록(2026-10-14): 커밋(f04b6da) 후 사용자가 sudo bash deploy/install-wsl.sh·install-wsl-web.sh 실행(DB 변경은 T16에서 적용, 새 패키지 없음).
+  결과: /opt/task-flow·/var/www/task-flow 파일이 HEAD와 같음, task-flow-api active(task-flow 계정), 로그인 없이 /api/tasks 401, 8000 / 404(API 전용 유지).
+  http://127.0.0.1(Nginx 80) 대상 재시험: API T17·T18·T19(T17·T18은 "로그인 없이 할 일 200" 항목만 의도대로 401), 화면 T20 30건·T21 36건 통과.
+  App 재시작 유지: 세 계정 데이터·쿠키 준비 → 사용자가 sudo systemctl restart task-flow-api(PID 22206 → 22975) → 세 계정 로그인 유지,
+  팀 할 일(DOING·HIGH)·개인 할 일·팀 멤버 유지, B 팀 할 일만·C 없음, B 삭제 403. 8건 통과.
+  기존 행: id 10은 반영 전(14:09) 이전 버전이 ngrok으로 공개된 동안 브라우저에서 삭제됨(nginx 로그 확인, T16 전 백업에 있음).
+  남은 작성자 없는 행 id 1·3은 사용자 확인 후 ~/backups/task_flow-before-legacy-delete-20261014-142223.sql(권한 600)로 백업하고 삭제(작성자 없는 행 0).
+  시험 계정·팀·할 일은 확인 후 삭제(사용자 계정 1개만 남음). 남은 오류: 없음.
+  참고: ngrok은 WSL에서 ngrok http 80으로 Nginx를 공개해야 화면·API가 함께 동작한다(8000은 API 전용).
   추가(2026-10-14, 사용자 요청): 로그인하지 않은 사용자에게 로그인 입력 화면을 바로 띄우지 않고 시작 화면(#/welcome)에
   로그인·회원가입 버튼을 따로 둔다. 머리글에도 로그인·회원가입 버튼(로그인 전), 로그아웃 후 시작 화면. 세션 만료 시에는 안내와 함께 로그인 화면.
   변경: frontend/index.html(시작 화면·머리글 버튼), frontend/styles.css(버튼 링크·시작 화면), frontend/app.js(#/welcome 경로, 로그인 필요 화면 → 시작 화면).
