@@ -12,8 +12,22 @@ from .auth import (
     auth_store,
     current_user,
 )
-from .schemas import LoginRequest, Priority, SignupRequest, Status, Task, TaskCreate, TaskUpdate, User
+from .schemas import (
+    LoginRequest,
+    Member,
+    MemberAdd,
+    Priority,
+    SignupRequest,
+    Status,
+    Task,
+    TaskCreate,
+    TaskUpdate,
+    Team,
+    TeamCreate,
+    User,
+)
 from .store import DbTaskStore
+from .teams import team_store
 
 app = FastAPI(title="Task Flow API")
 store = DbTaskStore()
@@ -71,6 +85,36 @@ def logout(request: Request, response: Response) -> None:
 def me(user: User = Depends(current_user)) -> User:
     """로그인한 사용자를 반환한다."""
     return user
+
+
+@app.post("/api/teams", status_code=status.HTTP_201_CREATED)
+def create_team(data: TeamCreate, user: User = Depends(current_user)) -> Team:
+    """팀을 만든다. 만든 사람이 팀장이 되고 멤버로도 저장된다."""
+    return team_store.create(data.name, user)
+
+
+@app.get("/api/teams")
+def list_teams(user: User = Depends(current_user)) -> list[Team]:
+    """내가 속한 팀 목록을 id 순서로 반환한다."""
+    return team_store.list_for(user)
+
+
+@app.get("/api/teams/{team_id}/members")
+def list_members(team_id: int, user: User = Depends(current_user)) -> list[Member]:
+    """팀 멤버 목록. 그 팀의 멤버만 볼 수 있다."""
+    return team_store.members(team_id, user)
+
+
+@app.post("/api/teams/{team_id}/members", status_code=status.HTTP_201_CREATED)
+def add_member(team_id: int, data: MemberAdd, user: User = Depends(current_user)) -> Member:
+    """팀장이 아이디로 멤버를 추가한다."""
+    return team_store.add_member(team_id, data.username, user)
+
+
+@app.delete("/api/teams/{team_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_member(team_id: int, user_id: int, user: User = Depends(current_user)) -> None:
+    """팀장의 멤버 제거 또는 본인 탈퇴."""
+    team_store.remove_member(team_id, user_id, user)
 
 
 @app.get("/api/tasks")

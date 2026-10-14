@@ -138,3 +138,54 @@ class User(BaseModel):
     id: int
     username: str
     created_at: datetime
+
+
+TEAM_NAME_MAX_LENGTH = 50
+
+
+class TeamCreate(BaseModel):
+    """POST /api/teams 요청 본문."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, value: str) -> str:
+        name = value.strip()
+        if not 1 <= len(name) <= TEAM_NAME_MAX_LENGTH:
+            raise ValueError(f"팀 이름은 앞뒤 공백 제거 후 1~{TEAM_NAME_MAX_LENGTH}자여야 합니다.")
+        return name
+
+
+class MemberAdd(BaseModel):
+    """POST /api/teams/{team_id}/members 요청 본문."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(max_length=100)
+
+
+class UserRef(BaseModel):
+    """다른 객체 안에 넣는 사용자 요약."""
+
+    id: int
+    username: str
+
+
+class Team(BaseModel):
+    """API 응답의 팀."""
+
+    id: int
+    name: str
+    owner: UserRef
+    created_at: datetime
+
+
+class Member(BaseModel):
+    """API 응답의 팀 멤버."""
+
+    user: UserRef
+    is_owner: bool
+    joined_at: datetime
