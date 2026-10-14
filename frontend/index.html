@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>Task Flow</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="container">
-    <header class="app-header">
-      <h1>Task Flow</h1>
+  <header class="app-header">
+    <div class="header-inner">
+      <h1 class="brand"><a href="#/"><span class="brand-mark" aria-hidden="true">✓</span>Task Flow</a></h1>
       <div id="guest-bar" class="user-bar" hidden>
         <a id="guest-login" class="button-link secondary" href="#/login">로그인</a>
         <a id="guest-signup" class="button-link" href="#/signup">회원가입</a>
@@ -20,37 +21,47 @@
           <a id="nav-teams" href="#/teams">팀</a>
         </nav>
         <span id="current-username" class="current-username"></span>
-        <button id="logout-button" type="button">로그아웃</button>
+        <button id="logout-button" class="ghost-button" type="button">로그아웃</button>
       </div>
-    </header>
+    </div>
+  </header>
 
+  <main class="container">
     <p id="loading-message" class="empty-message">불러오는 중…</p>
 
     <section id="welcome-view" class="welcome-view" aria-labelledby="welcome-heading" hidden>
+      <p class="eyebrow">개인 · 팀 할 일 관리</p>
       <h2 id="welcome-heading">할 일을 혼자 또는 팀과 함께 관리하세요</h2>
       <p class="welcome-text">개인 할 일은 나만 보고, 팀 할 일은 팀원과 함께 보고 수정합니다.</p>
       <div class="welcome-actions">
         <a id="welcome-login" class="button-link secondary" href="#/login">로그인</a>
         <a id="welcome-signup" class="button-link" href="#/signup">회원가입</a>
       </div>
+      <ul class="feature-list">
+        <li><strong>개인 할 일</strong><span>나만 보는 할 일을 상태·우선순위·마감일로 관리</span></li>
+        <li><strong>팀 할 일</strong><span>팀을 만들어 멤버와 함께 보고 수정</span></li>
+        <li><strong>검색과 필터</strong><span>제목 검색과 상태·우선순위·범위 필터</span></li>
+      </ul>
     </section>
 
-    <section id="login-view" class="auth-view" aria-labelledby="login-heading" hidden>
+    <section id="login-view" class="auth-view card" aria-labelledby="login-heading" hidden>
       <h2 id="login-heading">로그인</h2>
+      <p class="auth-subtitle">Task Flow 계정으로 로그인하세요.</p>
       <p id="login-notice" class="auth-notice" role="status"></p>
       <form id="login-form" class="auth-form" novalidate>
         <label for="login-username">아이디</label>
         <input id="login-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false">
         <label for="login-password">비밀번호</label>
         <input id="login-password" name="password" type="password" autocomplete="current-password">
-        <button id="login-button" type="submit">로그인</button>
+        <button id="login-button" class="primary-button" type="submit">로그인</button>
       </form>
       <p id="login-error" class="form-error" role="alert"></p>
       <p class="auth-switch">계정이 없나요? <a href="#/signup">회원가입</a></p>
     </section>
 
-    <section id="signup-view" class="auth-view" aria-labelledby="signup-heading" hidden>
+    <section id="signup-view" class="auth-view card" aria-labelledby="signup-heading" hidden>
       <h2 id="signup-heading">회원가입</h2>
+      <p class="auth-subtitle">아이디와 비밀번호만 있으면 시작할 수 있습니다.</p>
       <form id="signup-form" class="auth-form" novalidate>
         <label for="signup-username">아이디</label>
         <input id="signup-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="signup-username-help">
@@ -58,91 +69,99 @@
         <label for="signup-password">비밀번호</label>
         <input id="signup-password" name="password" type="password" autocomplete="new-password" aria-describedby="signup-password-help">
         <p id="signup-password-help" class="field-help">8~128자</p>
-        <button id="signup-button" type="submit">가입하기</button>
+        <button id="signup-button" class="primary-button" type="submit">가입하기</button>
       </form>
       <p id="signup-error" class="form-error" role="alert"></p>
       <p class="auth-switch">이미 계정이 있나요? <a href="#/login">로그인</a></p>
     </section>
 
     <div id="tasks-view" hidden>
-    <form id="task-form" class="task-form" novalidate>
-      <div class="form-row">
-        <label for="task-title" class="sr-only">할 일 제목</label>
-        <input id="task-title" name="title" type="text" placeholder="할 일 제목 (1~100자)" autocomplete="off">
-        <button id="submit-button" type="submit">등록</button>
-      </div>
-      <div class="form-row">
-        <label for="task-priority">우선순위</label>
-        <select id="task-priority" name="priority">
-          <option value="HIGH">높음</option>
-          <option value="NORMAL" selected>보통</option>
-          <option value="LOW">낮음</option>
-        </select>
-        <label for="task-due">마감일</label>
-        <input id="task-due" name="due_date" type="date">
-      </div>
-      <div class="form-row">
-        <label for="task-visibility">공개 범위</label>
-        <select id="task-visibility" name="visibility">
-          <option value="PRIVATE" selected>개인</option>
-          <option value="TEAM">팀</option>
-        </select>
-        <span id="task-team-field" hidden>
-          <label for="task-team" class="sr-only">팀</label>
-          <select id="task-team" name="team_id"></select>
-        </span>
-        <span id="no-team-help" class="field-help" hidden>팀에 속하면 팀 할 일을 등록할 수 있습니다.</span>
-      </div>
-      <label for="task-description" class="sr-only">설명</label>
-      <textarea id="task-description" name="description" rows="2" placeholder="설명 (선택, 최대 2000자)"></textarea>
-    </form>
-    <p id="form-error" class="form-error" role="alert"></p>
-    <p id="api-error" class="form-error" role="alert"></p>
-
-    <section aria-labelledby="list-heading">
-      <h2 id="list-heading">할 일 목록 <span id="task-count" class="count">(0)</span></h2>
-
-      <div class="filter-bar">
-        <label for="search-input" class="sr-only">제목 검색</label>
-        <input id="search-input" type="search" placeholder="제목 검색" autocomplete="off">
-        <label for="filter-status" class="sr-only">상태 필터</label>
-        <select id="filter-status">
-          <option value="">상태 전체</option>
-          <option value="TODO">할 일</option>
-          <option value="DOING">진행 중</option>
-          <option value="DONE">완료</option>
-        </select>
-        <label for="filter-priority" class="sr-only">우선순위 필터</label>
-        <select id="filter-priority">
-          <option value="">우선순위 전체</option>
-          <option value="HIGH">높음</option>
-          <option value="NORMAL">보통</option>
-          <option value="LOW">낮음</option>
-        </select>
-        <label for="filter-scope" class="sr-only">범위 필터</label>
-        <select id="filter-scope">
-          <option value="">범위 전체</option>
-          <option value="mine">내 할 일</option>
-        </select>
+      <div class="page-heading">
+        <h2 id="list-heading">할 일 <span id="task-count" class="count">(0)</span></h2>
       </div>
 
-      <p id="empty-message" class="empty-message">등록된 할 일이 없습니다.</p>
-      <ul id="task-list" class="task-list"></ul>
-    </section>
+      <form id="task-form" class="task-form card" novalidate>
+        <div class="form-row composer-main">
+          <label for="task-title" class="sr-only">할 일 제목</label>
+          <input id="task-title" name="title" type="text" placeholder="새 할 일을 입력하세요 (1~100자)" autocomplete="off">
+          <button id="submit-button" class="primary-button" type="submit">등록</button>
+        </div>
+        <label for="task-description" class="sr-only">설명</label>
+        <textarea id="task-description" name="description" rows="2" placeholder="설명 (선택, 최대 2000자)"></textarea>
+        <div class="form-row composer-options">
+          <div class="field">
+            <label for="task-priority">우선순위</label>
+            <select id="task-priority" name="priority">
+              <option value="HIGH">높음</option>
+              <option value="NORMAL" selected>보통</option>
+              <option value="LOW">낮음</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="task-due">마감일</label>
+            <input id="task-due" name="due_date" type="date">
+          </div>
+          <div class="field">
+            <label for="task-visibility">공개 범위</label>
+            <select id="task-visibility" name="visibility">
+              <option value="PRIVATE" selected>개인</option>
+              <option value="TEAM">팀</option>
+            </select>
+          </div>
+          <div id="task-team-field" class="field" hidden>
+            <label for="task-team">팀</label>
+            <select id="task-team" name="team_id"></select>
+          </div>
+          <span id="no-team-help" class="field-help" hidden>팀에 속하면 팀 할 일을 등록할 수 있습니다.</span>
+        </div>
+      </form>
+      <p id="form-error" class="form-error" role="alert"></p>
+      <p id="api-error" class="form-error" role="alert"></p>
+
+      <section aria-labelledby="list-heading">
+        <div class="filter-bar">
+          <label for="search-input" class="sr-only">제목 검색</label>
+          <input id="search-input" type="search" placeholder="제목 검색" autocomplete="off">
+          <label for="filter-status" class="sr-only">상태 필터</label>
+          <select id="filter-status">
+            <option value="">상태 전체</option>
+            <option value="TODO">할 일</option>
+            <option value="DOING">진행 중</option>
+            <option value="DONE">완료</option>
+          </select>
+          <label for="filter-priority" class="sr-only">우선순위 필터</label>
+          <select id="filter-priority">
+            <option value="">우선순위 전체</option>
+            <option value="HIGH">높음</option>
+            <option value="NORMAL">보통</option>
+            <option value="LOW">낮음</option>
+          </select>
+          <label for="filter-scope" class="sr-only">범위 필터</label>
+          <select id="filter-scope">
+            <option value="">범위 전체</option>
+            <option value="mine">내 할 일</option>
+          </select>
+        </div>
+
+        <p id="empty-message" class="empty-message">등록된 할 일이 없습니다.</p>
+        <ul id="task-list" class="task-list"></ul>
+      </section>
     </div>
 
     <section id="teams-view" aria-labelledby="teams-heading" hidden>
-      <h2 id="teams-heading">팀</h2>
-      <form id="team-form" class="task-form" novalidate>
-        <div class="form-row">
+      <div class="page-heading">
+        <h2 id="teams-heading">팀</h2>
+      </div>
+      <form id="team-form" class="task-form card" novalidate>
+        <div class="form-row composer-main">
           <label for="team-name" class="sr-only">새 팀 이름</label>
           <input id="team-name" type="text" placeholder="새 팀 이름 (1~50자)" autocomplete="off">
-          <button id="team-button" type="submit">팀 만들기</button>
+          <button id="team-button" class="primary-button" type="submit">팀 만들기</button>
         </div>
       </form>
       <p id="team-error" class="form-error" role="alert"></p>
       <p id="teams-empty" class="empty-message">속한 팀이 없습니다.</p>
-      <ul id="team-list" class="task-list"></ul>
+      <ul id="team-list" class="task-list team-list"></ul>
     </section>
   </main>
 

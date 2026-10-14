@@ -392,9 +392,12 @@ function deleteTask(id) {
   return runAction(() => request("DELETE", `/tasks/${id}`));
 }
 
-function createButton(label, onClick) {
+function createButton(label, onClick, className = "") {
   const button = document.createElement("button");
   button.type = "button";
+  if (className) {
+    button.className = className;
+  }
   button.textContent = label;
   button.addEventListener("click", onClick);
   return button;
@@ -489,7 +492,7 @@ function createEditForm(task) {
     options.appendChild(visibilityField);
     options.appendChild(teamSelect);
   }
-  options.appendChild(createButton("저장", save));
+  options.appendChild(createButton("저장", save, "primary"));
   options.appendChild(createButton("취소", cancelEdit));
 
   container.appendChild(titleField);
@@ -575,7 +578,7 @@ function createTaskItem(task, today) {
   actions.appendChild(createButton("수정", () => startEdit(task.id)));
   // 삭제는 작성자만 할 수 있다(서버도 403으로 거절한다).
   if (isOwner(task)) {
-    actions.appendChild(createButton("삭제", () => deleteTask(task.id)));
+    actions.appendChild(createButton("삭제", () => deleteTask(task.id), "danger"));
   }
 
   main.appendChild(info);
@@ -811,9 +814,9 @@ function createTeamItem({ team, members }) {
     if (member.is_owner) {
       row.appendChild(createBadge("팀장", "owner"));
     } else if (member.user.id === currentUser.id) {
-      row.appendChild(createButton("탈퇴", () => removeMember(team, member)));
+      row.appendChild(createButton("탈퇴", () => removeMember(team, member), "danger"));
     } else if (amOwner) {
-      row.appendChild(createButton("제거", () => removeMember(team, member)));
+      row.appendChild(createButton("제거", () => removeMember(team, member), "danger"));
     }
     memberList.appendChild(row);
   }
@@ -831,6 +834,7 @@ function createTeamItem({ team, members }) {
     input.setAttribute("aria-label", `${team.name} 팀에 추가할 아이디`);
     const button = document.createElement("button");
     button.type = "submit";
+    button.className = "primary";
     button.textContent = "멤버 추가";
     addForm.appendChild(input);
     addForm.appendChild(button);
