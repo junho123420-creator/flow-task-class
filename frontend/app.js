@@ -15,6 +15,20 @@ const PRIORITIES = [
   { value: "LOW", label: "낮음" },
 ];
 const DEFAULT_PRIORITY = "NORMAL";
+const USERNAME_PATTERN = /^[a-z0-9_]{3,30}$/;
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 128;
+// 주소(#/...)별 화면. 로그인 여부에 따라 들어갈 수 있는 화면이 다르다.
+const ROUTES = {
+  "#/login": { view: "login", title: "로그인", needsLogin: false },
+  "#/signup": { view: "signup", title: "회원가입", needsLogin: false },
+  "#/": { view: "tasks", title: "할 일", needsLogin: true },
+};
+const DEFAULT_ROUTE = "#/";
+const LOGIN_ROUTE = "#/login";
+
+// 로그인한 사용자({id, username}). 로그인하지 않았으면 null.
+let currentUser = null;
 
 // 마지막으로 API에서 받은 목록(검색·필터 적용 결과).
 let tasks = [];
@@ -44,6 +58,26 @@ const priorityFilter = document.getElementById("filter-priority");
 const taskList = document.getElementById("task-list");
 const taskCount = document.getElementById("task-count");
 const emptyMessage = document.getElementById("empty-message");
+const loadingMessage = document.getElementById("loading-message");
+const userBar = document.getElementById("user-bar");
+const currentUsername = document.getElementById("current-username");
+const logoutButton = document.getElementById("logout-button");
+const views = {
+  login: document.getElementById("login-view"),
+  signup: document.getElementById("signup-view"),
+  tasks: document.getElementById("tasks-view"),
+};
+const loginForm = document.getElementById("login-form");
+const loginUsername = document.getElementById("login-username");
+const loginPassword = document.getElementById("login-password");
+const loginButton = document.getElementById("login-button");
+const loginError = document.getElementById("login-error");
+const loginNotice = document.getElementById("login-notice");
+const signupForm = document.getElementById("signup-form");
+const signupUsername = document.getElementById("signup-username");
+const signupPassword = document.getElementById("signup-password");
+const signupButton = document.getElementById("signup-button");
+const signupError = document.getElementById("signup-error");
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -87,6 +121,10 @@ async function request(method, path, body) {
     data = null;
   }
   if (!response.ok) {
+    // 할 일 등 로그인이 필요한 요청에서 401이면 세션이 만료·로그아웃된 것이므로 로그인 화면으로 보낸다.
+    if (response.status === 401 && !path.startsWith("/auth/")) {
+      handleSessionExpired();
+    }
     throw new ApiError(errorMessage(data, response.status), response.status);
   }
   return data;
@@ -535,4 +573,186 @@ priorityFilter.addEventListener("change", () => {
   loadTasks();
 });
 
-loadTasks();
+// ---- 로그인·회원가입과 화면 전환 ----
+
+function currentRoute() {
+  return ROUTES[window.location.hash] ? window.location.hash : DEFAULT_ROUTE;
+}
+
+// 주소를 바꾼다. replace면 뒤로가기 기록을 남기지 않는다(자동 이동에 사용).
+function navigate(hash, replace = false) {
+  if (window.location.hash === hash) {
+    showRoute();
+  } else if (replace) {
+    window.location.replace(hash);
+  } else {
+    window.location.hash = hash;
+  }
+}
+
+function showRoute() {
+  const hash = currentRoute();
+  const route = ROUTES[hash];
+  // 로그인 여부와 맞지 않는 화면이면 맞는 화면으로 보낸다.
+  if (route.needsLogin && !currentUser) {
+    navigate(LOGIN_ROUTE, true);
+    return;
+  }
+  if (!route.needsLogin && currentUser) {
+    navigate(DEFAULT_ROUTE, true);
+    return;
+  }
+  if (window.location.hash !== hash) {
+    window.history.replaceState(null, "", hash);
+  }
+
+  loadingMessage.hidden = true;
+  for (const [name, element] of Object.entries(views)) {
+    element.hidden = name !== route.view;
+  }
+  document.title = `${route.title} - Task Flow`;
+  userBar.hidden = !currentUser;
+  currentUsername.textContent = currentUser ? currentUser.username : "";
+
+  if (route.view === "login") {
+    loginError.textContent = "";
+    loginPassword.value = "";
+    (loginUsername.value ? loginPassword : loginUsername).focus();
+  } else if (route.view === "signup") {
+    signupError.textContent = "";
+    signupUsername.focus();
+  } else {
+    loginNotice.textContent = "";
+    loadTasks();
+  }
+}
+
+// 로그아웃하거나 세션이 끝났을 때 이전 사용자의 화면 상태를 지운다.
+function clearUserState() {
+  currentUser = null;
+  tasks = [];
+  editingId = null;
+  editError = "";
+  loadFailed = false;
+  listRequestId += 1;
+  window.clearTimeout(searchTimer);
+  filters.query = "";
+  filters.status = "";
+  filters.priority = "";
+  searchInput.value = "";
+  statusFilter.value = "";
+  priorityFilter.value = "";
+  resetForm();
+  formError.textContent = "";
+  apiError.textContent = "";
+  taskList.replaceChildren();
+}
+
+function handleSessionExpired() {
+  if (!currentUser) {
+    return;
+  }
+  clearUserState();
+  loginNotice.textContent = "로그인이 필요합니다. 다시 로그인하세요.";
+  navigate(LOGIN_ROUTE, true);
+}
+
+function validateSignup(username, password) {
+  if (!USERNAME_PATTERN.test(username)) {
+    return "아이디는 영문 소문자·숫자·밑줄 3~30자여야 합니다.";
+  }
+  const length = textLength(password);
+  if (length < PASSWORD_MIN_LENGTH || length > PASSWORD_MAX_LENGTH) {
+    return `비밀번호는 ${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자여야 합니다.`;
+  }
+  return null;
+}
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (loginButton.disabled) {
+    return;
+  }
+  const username = loginUsername.value;
+  const password = loginPassword.value;
+  if (username === "" || password === "") {
+    loginError.textContent = "아이디와 비밀번호를 입력하세요.";
+    return;
+  }
+  loginButton.disabled = true;
+  try {
+    currentUser = await request("POST", "/auth/login", { username, password });
+  } catch (requestError) {
+    loginError.textContent = requestError.message;
+    loginPassword.value = "";
+    loginPassword.focus();
+    return;
+  } finally {
+    loginButton.disabled = false;
+  }
+  loginPassword.value = "";
+  loginError.textContent = "";
+  loginNotice.textContent = "";
+  navigate(DEFAULT_ROUTE);
+});
+
+signupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (signupButton.disabled) {
+    return;
+  }
+  // 아이디와 비밀번호는 변환하지 않고 입력한 그대로 보낸다(서버도 같은 규칙으로 검증).
+  const username = signupUsername.value;
+  const password = signupPassword.value;
+  const error = validateSignup(username, password);
+  if (error) {
+    signupError.textContent = error;
+    return;
+  }
+  signupButton.disabled = true;
+  try {
+    await request("POST", "/auth/signup", { username, password });
+  } catch (requestError) {
+    signupError.textContent = requestError.message;
+    return;
+  } finally {
+    signupButton.disabled = false;
+  }
+  // 가입만 하고 자동 로그인하지 않는다. 로그인 화면에 아이디를 채워 둔다.
+  signupForm.reset();
+  signupError.textContent = "";
+  loginUsername.value = username;
+  loginNotice.textContent = "가입되었습니다. 로그인하세요.";
+  navigate(LOGIN_ROUTE);
+});
+
+logoutButton.addEventListener("click", async () => {
+  logoutButton.disabled = true;
+  try {
+    await request("POST", "/auth/logout");
+  } catch (requestError) {
+    // 서버에 연결하지 못해도 화면에서는 로그아웃 상태로 바꾼다.
+  } finally {
+    logoutButton.disabled = false;
+  }
+  clearUserState();
+  loginUsername.value = "";
+  navigate(LOGIN_ROUTE);
+});
+
+window.addEventListener("hashchange", showRoute);
+
+// 처음 열 때 세션 쿠키로 로그인 상태를 확인한 뒤 화면을 고른다.
+async function start() {
+  try {
+    currentUser = await request("GET", "/auth/me");
+  } catch (requestError) {
+    currentUser = null;
+    if (requestError.status !== 401) {
+      loginNotice.textContent = requestError.message;
+    }
+  }
+  showRoute();
+}
+
+start();
