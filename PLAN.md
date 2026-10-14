@@ -97,7 +97,11 @@
   deploy/task-flow-web.conf(이름 변경), install-wsl.sh(App 설치), install-wsl-web.sh(Web 설치) 추가.
   확인: 저장소 코드로 uvicorn 8006 실행 시 /·index.html·app.js 404, /api/health·/api/tasks·/docs·/openapi.json 200,
   등록 201·PATCH 200·삭제 204·빈 제목 422. 스크립트 bash -n 문법 확인.
-  남은 확인: 커밋 후 install-wsl.sh·install-wsl-web.sh 실행(sudo)으로 시스템 반영, 8000 / 404·80 화면 200 확인.
+  반영: 커밋(a7ca36e) 후 sudo bash deploy/install-wsl.sh, sudo bash deploy/install-wsl-web.sh 실행.
+  처음 실행 시 /tmp의 기존 압축 파일(사용자 소유)에 root가 쓰지 못해 실패(fs.protected_regular=2) → 스크립트가 mktemp 임시 파일을 쓰도록 수정.
+  결과: /opt/task-flow에 backend·requirements.txt만 설치(frontend 정리), sites-enabled는 task-flow-web만 연결.
+  8000: / ·index.html 404, /api/health·/docs 200. 80: / ·app.js 200, /api/health 200.
+  80으로 등록 201·PATCH 200·검색 조회·삭제 204·재삭제 404(테스트 행 삭제). 남은 오류: 없음.
 ## 실행 기준
 T01~T04: python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 T05~T11: 가상환경에서 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload

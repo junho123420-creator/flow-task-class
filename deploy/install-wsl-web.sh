@@ -7,7 +7,6 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 WEB_DIR=/var/www/task-flow
 SITE=task-flow-web
-ARCHIVE=/tmp/task-flow-web.tar.gz
 
 if [[ $EUID -ne 0 ]]; then
   echo "sudo로 실행하세요: sudo bash deploy/install-wsl-web.sh" >&2
@@ -16,6 +15,10 @@ fi
 
 echo "[1] Nginx 설치"
 command -v nginx >/dev/null || apt-get install -y nginx
+
+# 실행할 때마다 새 임시 파일을 쓴다(/tmp의 다른 사용자 파일은 root도 덮어쓸 수 없다: fs.protected_regular).
+ARCHIVE="$(mktemp --suffix=.tar.gz)"
+trap 'rm -f "$ARCHIVE"' EXIT
 
 echo "[2] 정적 파일 → $WEB_DIR"
 git -C "$REPO" -c safe.directory="$REPO" archive --format=tar.gz -o "$ARCHIVE" HEAD frontend
