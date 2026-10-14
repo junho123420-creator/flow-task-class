@@ -25,6 +25,7 @@ const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 // 주소(#/...)별 화면. 로그인 여부에 따라 들어갈 수 있는 화면이 다르다.
 const ROUTES = {
+  "#/welcome": { view: "welcome", title: "시작", needsLogin: false },
   "#/login": { view: "login", title: "로그인", needsLogin: false },
   "#/signup": { view: "signup", title: "회원가입", needsLogin: false },
   "#/": { view: "tasks", title: "할 일", needsLogin: true },
@@ -32,6 +33,8 @@ const ROUTES = {
 };
 const DEFAULT_ROUTE = "#/";
 const LOGIN_ROUTE = "#/login";
+// 로그인하지 않은 사용자가 처음 보는 화면(로그인·회원가입 버튼).
+const WELCOME_ROUTE = "#/welcome";
 
 // 로그인한 사용자({id, username}). 로그인하지 않았으면 null.
 let currentUser = null;
@@ -84,9 +87,12 @@ const teamsEmpty = document.getElementById("teams-empty");
 const teamList = document.getElementById("team-list");
 const loadingMessage = document.getElementById("loading-message");
 const userBar = document.getElementById("user-bar");
+const guestBar = document.getElementById("guest-bar");
+const guestLinks = { login: document.getElementById("guest-login"), signup: document.getElementById("guest-signup") };
 const currentUsername = document.getElementById("current-username");
 const logoutButton = document.getElementById("logout-button");
 const views = {
+  welcome: document.getElementById("welcome-view"),
   login: document.getElementById("login-view"),
   signup: document.getElementById("signup-view"),
   tasks: document.getElementById("tasks-view"),
@@ -896,7 +902,7 @@ function showRoute() {
   const route = ROUTES[hash];
   // 로그인 여부와 맞지 않는 화면이면 맞는 화면으로 보낸다.
   if (route.needsLogin && !currentUser) {
-    navigate(LOGIN_ROUTE, true);
+    navigate(WELCOME_ROUTE, true);
     return;
   }
   if (!route.needsLogin && currentUser) {
@@ -913,6 +919,14 @@ function showRoute() {
   }
   document.title = `${route.title} - Task Flow`;
   userBar.hidden = !currentUser;
+  guestBar.hidden = Boolean(currentUser);
+  for (const [name, link] of Object.entries(guestLinks)) {
+    if (name === route.view) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
   currentUsername.textContent = currentUser ? currentUser.username : "";
   for (const [name, link] of Object.entries(navLinks)) {
     if (name === route.view) {
@@ -922,7 +936,9 @@ function showRoute() {
     }
   }
 
-  if (route.view === "login") {
+  if (route.view === "welcome") {
+    loginNotice.textContent = "";
+  } else if (route.view === "login") {
     loginError.textContent = "";
     loginPassword.value = "";
     (loginUsername.value ? loginPassword : loginUsername).focus();
@@ -1056,7 +1072,7 @@ logoutButton.addEventListener("click", async () => {
   }
   clearUserState();
   loginUsername.value = "";
-  navigate(LOGIN_ROUTE);
+  navigate(WELCOME_ROUTE);
 });
 
 window.addEventListener("hashchange", showRoute);

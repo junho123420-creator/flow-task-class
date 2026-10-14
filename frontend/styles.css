@@ -436,3 +436,63 @@ h2 {
   border: 1px solid #ccc;
   border-radius: 4px;
 }
+
+.button-link {
+  display: inline-block;
+  padding: 8px 16px;
+  font-size: 0.95rem;
+  border: 1px solid #2f6fed;
+  border-radius: 6px;
+  background: #2f6fed;
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-link:hover {
+  background: #2459c4;
+  border-color: #2459c4;
+}
+
+.button-link.secondary {
+  background: #fff;
+  color: #2f6fed;
+}
+
+.button-link.secondary:hover {
+  background: #e7eefe;
+}
+
+.button-link[aria-current="page"] {
+  box-shadow: 0 0 0 2px #c9d8fb;
+}
+
+.welcome-view {
+  padding: 48px 24px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e2e4e8;
+  border-radius: 8px;
+}
+
+.welcome-view h2 {
+  margin-top: 0;
+  font-size: 1.3rem;
+}
+
+.welcome-text {
+  color: #555;
+}
+
+.welcome-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.welcome-actions .button-link {
+  min-width: 120px;
+  padding: 12px 20px;
+  font-size: 1rem;
+}

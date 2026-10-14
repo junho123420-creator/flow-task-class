@@ -223,6 +223,10 @@
 - [ ] T22: WSL 배포 반영(install-wsl.sh, install-wsl-web.sh)과 통합 확인.
   확인: http://localhost/에서 세 계정 시나리오, App 재시작 후 데이터·로그인 유지, 8000은 API만 제공 유지.
   기존 작성자 없는 행 정리는 백업 후 사용자 확인을 받아 진행.
+  추가(2026-10-14, 사용자 요청): 로그인하지 않은 사용자에게 로그인 입력 화면을 바로 띄우지 않고 시작 화면(#/welcome)에
+  로그인·회원가입 버튼을 따로 둔다. 머리글에도 로그인·회원가입 버튼(로그인 전), 로그아웃 후 시작 화면. 세션 만료 시에는 안내와 함께 로그인 화면.
+  변경: frontend/index.html(시작 화면·머리글 버튼), frontend/styles.css(버튼 링크·시작 화면), frontend/app.js(#/welcome 경로, 로그인 필요 화면 → 시작 화면).
+  확인(테스트 서버 8006 + 임시 Nginx 8088): 화면 시험 T20 35건(시작 화면·버튼·뒤로가기·머리글 버튼 현재 위치 표시 추가), T21 36건 통과, 화면 캡처 확인.
 ## 실행 기준
 T01~T04: python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 T05~T11: 가상환경에서 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload

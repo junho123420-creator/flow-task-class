@@ -10,6 +10,10 @@
   <main class="container">
     <header class="app-header">
       <h1>Task Flow</h1>
+      <div id="guest-bar" class="user-bar" hidden>
+        <a id="guest-login" class="button-link secondary" href="#/login">로그인</a>
+        <a id="guest-signup" class="button-link" href="#/signup">회원가입</a>
+      </div>
       <div id="user-bar" class="user-bar" hidden>
         <nav class="main-nav" aria-label="메뉴">
           <a id="nav-tasks" href="#/">할 일</a>
@@ -21,6 +25,15 @@
     </header>
 
     <p id="loading-message" class="empty-message">불러오는 중…</p>
+
+    <section id="welcome-view" class="welcome-view" aria-labelledby="welcome-heading" hidden>
+      <h2 id="welcome-heading">할 일을 혼자 또는 팀과 함께 관리하세요</h2>
+      <p class="welcome-text">개인 할 일은 나만 보고, 팀 할 일은 팀원과 함께 보고 수정합니다.</p>
+      <div class="welcome-actions">
+        <a id="welcome-login" class="button-link secondary" href="#/login">로그인</a>
+        <a id="welcome-signup" class="button-link" href="#/signup">회원가입</a>
+      </div>
+    </section>
 
     <section id="login-view" class="auth-view" aria-labelledby="login-heading" hidden>
       <h2 id="login-heading">로그인</h2>
