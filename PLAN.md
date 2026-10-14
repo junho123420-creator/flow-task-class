@@ -91,7 +91,7 @@
   결과: http://127.0.0.1/ → 200(Task Flow 화면), /api/health → 200. Web 주소로 등록(POST 201, id 5) → DB SELECT로 행 확인.
   sudo systemctl restart task-flow-api.service(새 PID) 후 /api/tasks에 id 5 유지. /.env → 404. nginx access.log에 요청 기록.
   설치 전 사용자 권한 임시 Nginx(8088)로 같은 설정 검증: 정적 200, POST 201, 422, /.env·/backend/main.py 404.
-  테스트 행(id 4, 5)은 확인 후 삭제. 남은 오류: 없음. 미확인: App 중지 시 502 표시(sudo 필요로 실행 안 함).
+  테스트 행(id 4, 5)은 확인 후 삭제. 남은 오류: 없음. App 중지 시: 80 화면 200, /api/health·/api/tasks 502(Nginx), 화면 문구 "요청을 처리하지 못했습니다. (HTTP 502)". App 재시작 후 /api 200으로 복구.
   추가(2026-10-14, 사용자 요청): 8000은 FastAPI(API·/docs)만 사용. backend/main.py에서 frontend StaticFiles 제공 제거,
   API-SPEC.md 화면 제공 항목 갱신, App 묶음(APP-SERVER.md·install-wsl.sh)에서 frontend 제외.
   deploy/task-flow-web.conf(이름 변경), install-wsl.sh(App 설치), install-wsl-web.sh(Web 설치) 추가.
