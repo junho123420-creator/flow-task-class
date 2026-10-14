@@ -102,9 +102,41 @@
   결과: /opt/task-flow에 backend·requirements.txt만 설치(frontend 정리), sites-enabled는 task-flow-web만 연결.
   8000: / ·index.html 404, /api/health·/docs 200. 80: / ·app.js 200, /api/health 200.
   80으로 등록 201·PATCH 200·검색 조회·삭제 204·재삭제 404(테스트 행 삭제). 남은 오류: 없음.
+## 6장: 다중 사용자·팀 (PRD F10~F16)
+- [ ] T15: API-SPEC.md에 인증·팀 API와 할 일 API 변경 사항 작성. 코드 변경 없음.
+  범위: POST /api/auth/signup·login·logout, GET /api/auth/me, 세션 쿠키 규칙,
+  팀: POST /api/teams, GET /api/teams(내가 속한 팀), GET /api/teams/{id}/members, POST /api/teams/{id}/members(아이디로 추가),
+  DELETE /api/teams/{id}/members/{user_id}(팀장의 제거 또는 본인 탈퇴),
+  할 일 응답의 owner·visibility·team, 목록 scope 필터(all·mine·team_id),
+  상태 코드(401 로그인 필요, 403 권한 없음, 404 없음·볼 수 없음, 409 아이디·팀 이름 중복·이미 멤버).
+  확인: PRD F10~F16과 API-SPEC 항목이 하나씩 대응한다.
+- [ ] T16: users·sessions·teams·team_members 테이블 추가, tasks에 owner_id(NULL 허용)·visibility(기본 PRIVATE)·team_id(NULL 허용) 추가.
+  기존 테이블·행은 삭제하지 않는다. 변경 전 mysqldump 백업. 변경은 별도 스크립트(backend/migrate_*.py)로 한 번만 적용.
+  확인: SHOW CREATE TABLE로 새 열·외래키·인덱스·유일 제약 확인, 기존 행 수 유지, 스크립트 재실행 시 변경 없음.
+- [ ] T17: 회원가입·로그인·로그아웃·내 정보 API. 비밀번호는 hashlib.scrypt, 세션 토큰은 secrets로 발급하고 해시만 저장.
+  쿠키: HttpOnly, SameSite=Lax, Path=/, 7일. 새 패키지 없음.
+  확인: 가입 201, 아이디 중복 409, 형식 위반 422, 잘못된 비밀번호와 없는 아이디 모두 같은 401, 로그인 후 me 200,
+  로그아웃 후 me 401, DB에 비밀번호·토큰 원문 없음, API 재시작 후 로그인 유지.
+- [ ] T18: 팀 API. 팀 생성(만든 사람이 팀장·멤버), 내 팀 목록, 멤버 목록·추가·제거, 본인 탈퇴.
+  확인: 이름 중복 409, 팀장 아닌 사용자의 추가·제거 403, 없는 아이디 404, 중복 추가 409, 팀장 탈퇴·제거 거절,
+  팀 밖 사용자의 멤버 목록 조회 404, 여러 팀 소속 가능.
+- [ ] T19: 할 일 API에 로그인·권한 적용. 로그인 없으면 401. 등록 시 owner_id=로그인 사용자.
+  목록은 내 할 일 + 내가 속한 팀의 TEAM 할 일(작성자 없는 기존 행 제외), scope 필터. 볼 수 없는 할 일은 404.
+  TEAM 지정은 작성자가 속한 팀만 가능(아니면 422). TEAM 할 일은 팀 멤버가 수정, 삭제·visibility·team 변경은 작성자만(그 외 403).
+  확인: 세 계정(A·B 같은 팀, C 팀 밖)으로 조회·수정·삭제 권한 표, 팀에서 제거된 멤버의 접근 404,
+  기존 T06~T11 입력 검증(422) 회귀, 기존 작성자 없는 행 미표시.
+- [ ] T20: 프런트엔드 로그인·회원가입 화면, 로그아웃 버튼, 로그인 사용자 표시, 401 응답 시 로그인 화면 전환.
+  확인: 브라우저에서 가입·로그인·로그아웃·새로고침 후 로그인 유지, 잘못된 로그인 문구, 아이디 글자 표시.
+- [ ] T21: 프런트엔드 팀 관리(팀 만들기, 멤버 추가·제거, 탈퇴)와 할 일 공개 범위·팀 선택, 작성자·팀 표시, 범위 필터.
+  작성자가 아니면 삭제·공개 범위 변경 숨김(서버도 거절).
+  확인: 브라우저에서 세 계정으로 PRD 완료 기준 확인, 팀 이름·아이디 등 사용자 입력 글자로 표시.
+- [ ] T22: WSL 배포 반영(install-wsl.sh, install-wsl-web.sh)과 통합 확인.
+  확인: http://localhost/에서 세 계정 시나리오, App 재시작 후 데이터·로그인 유지, 8000은 API만 제공 유지.
+  기존 작성자 없는 행 정리는 백업 후 사용자 확인을 받아 진행.
 ## 실행 기준
 T01~T04: python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 T05~T11: 가상환경에서 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+T15~T21: 개발 확인은 테스트 포트(예: 8001)에서 uvicorn 실행. 시스템 반영은 커밋 후 deploy/install-wsl.sh·install-wsl-web.sh
 실제 존재하는 파일을 확인한 뒤 명령을 실행한다.
 ## 기록
 각 작업에 변경 파일, 실행 명령, 실제 확인 결과, 남은 오류를 기록한다.
