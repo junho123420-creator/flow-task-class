@@ -1,10 +1,18 @@
 import logging
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from .schemas import Priority, Status, Task, TaskCreate, TaskUpdate
+from .auth import (
+    LOGIN_FAILED,
+    SESSION_COOKIE,
+    SESSION_MAX_AGE,
+    USERNAME_TAKEN,
+    auth_store,
+    current_user,
+)
+from .schemas import LoginRequest, Priority, SignupRequest, Status, Task, TaskCreate, TaskUpdate, User
 from .store import DbTaskStore
 
 app = FastAPI(title="Task Flow API")
@@ -26,6 +34,43 @@ def handle_database_error(request: Request, error: SQLAlchemyError) -> JSONRespo
 def health() -> dict[str, str]:
     """API 서버가 요청을 처리할 수 있는지 확인한다."""
     return {"status": "ok"}
+
+
+@app.post("/api/auth/signup", status_code=status.HTTP_201_CREATED)
+def signup(data: SignupRequest) -> User:
+    """회원가입만 하고 로그인하지 않는다(세션 쿠키 없음)."""
+    user = auth_store.signup(data.username, data.password)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=USERNAME_TAKEN)
+    return user
+
+
+@app.post("/api/auth/login")
+def login(data: LoginRequest, response: Response) -> User:
+    """로그인하고 세션 쿠키를 보낸다. 없는 아이디와 틀린 비밀번호는 같은 401로 응답한다."""
+    result = auth_store.login(data.username, data.password)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=LOGIN_FAILED)
+    user, token = result
+    response.set_cookie(
+        SESSION_COOKIE, token, max_age=SESSION_MAX_AGE, path="/", httponly=True, samesite="lax"
+    )
+    return user
+
+
+@app.post("/api/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(request: Request, response: Response) -> None:
+    """현재 세션을 지우고 쿠키를 삭제한다. 로그인하지 않았어도 204."""
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        auth_store.logout(token)
+    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="lax")
+
+
+@app.get("/api/auth/me")
+def me(user: User = Depends(current_user)) -> User:
+    """로그인한 사용자를 반환한다."""
+    return user
 
 
 @app.get("/api/tasks")

@@ -92,3 +92,49 @@ class Task(BaseModel):
     priority: Priority
     due_date: date | None
     created_at: datetime
+
+
+USERNAME_PATTERN = re.compile(r"[a-z0-9_]{3,30}")
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128
+
+
+class SignupRequest(BaseModel):
+    """POST /api/auth/signup 요청 본문. 아이디는 변환하지 않고 형식만 확인한다."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def check_username(cls, value: str) -> str:
+        if not USERNAME_PATTERN.fullmatch(value):
+            raise ValueError("아이디는 영문 소문자·숫자·밑줄 3~30자여야 합니다.")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value: str) -> str:
+        # 비밀번호는 앞뒤 공백을 지우지 않고 그대로 쓴다.
+        if not PASSWORD_MIN_LENGTH <= len(value) <= PASSWORD_MAX_LENGTH:
+            raise ValueError(f"비밀번호는 {PASSWORD_MIN_LENGTH}~{PASSWORD_MAX_LENGTH}자여야 합니다.")
+        return value
+
+
+class LoginRequest(BaseModel):
+    """POST /api/auth/login 요청 본문. 형식이 달라도 422가 아닌 401로 처리하도록 길이만 제한한다."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=1000)
+
+
+class User(BaseModel):
+    """API 응답의 사용자. 비밀번호 해시는 포함하지 않는다."""
+
+    id: int
+    username: str
+    created_at: datetime
