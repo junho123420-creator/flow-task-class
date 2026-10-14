@@ -67,11 +67,37 @@
   결과: 등록 행을 mariadb SELECT로 확인. API 재시작 후 같은 id·수정 내용 유지. 틀린 DB 비밀번호로 실행 시 /api/tasks 503, 로그에 비밀번호 미노출.
   테스트 항목([T11검증] 제목)은 확인 후 삭제해 tasks는 0행. AUTO_INCREMENT는 6부터 시작. 남은 오류 없음.
 ## 5장: 서버 분리
-- [ ] T12: DB 서버 구성 후 App 서버에서 SELECT 1 확인.
-- [ ] T13: App 서버 코드·가상환경·환경변수·systemd 구성.
+- [x] T12: DB 서버 구성 후 App 서버에서 SELECT 1 확인.
+  기록(2026-10-14): 수업 구성에 따라 WSL 한 대에 App(FastAPI)과 DB(MariaDB)를 함께 둔다.
+  DB: MariaDB 11.8.6(mariadb.service, enabled·active), 127.0.0.1:3306에서만 수신, DB task_flow, 사용자 task_flow_app@localhost.
+  실행: 앱 설정(.env)으로 접속해 SELECT 1 실행.
+  결과: SELECT 1 → 1, CURRENT_USER task_flow_app@localhost, DATABASE task_flow, tasks 테이블 조회 정상. 남은 오류: 없음.
+- [x] T13: App 서버 코드·가상환경·환경변수·systemd 구성.
   확인: App에서 /api/health 응답.
-- [ ] T14: Web 서버 Nginx와 정적 파일·/api 프록시 구성.
+  기록(2026-10-14): WSL을 App 서버로 사용. deploy/task-flow-api.service(/opt/task-flow, task-flow 계정, 0.0.0.0:8000,
+  After=mariadb.service, Restart=on-failure), deploy/APP-SERVER.md(git archive 묶기·venv·.env 600·systemd·확인 절차) 작성.
+  코드 push 없이 git archive(HEAD의 backend·frontend·requirements.txt)로 /opt/task-flow에 설치.
+  실행: deploy/APP-SERVER.md 1~6단계(useradd --system task-flow, git archive → tar 해제, python3 -m venv, pip install,
+        install -m 600 .env, systemd 등록 후 enable·restart).
+  결과: 설치 파일과 deploy 파일 동일, enabled, active(running), 프로세스 계정 task-flow, /opt/task-flow/.env 600(task-flow 소유).
+  curl /api/health → 200 {"status":"ok"}, /api/tasks → 200(DB 연결 정상). 8000은 0.0.0.0, 3306은 127.0.0.1에서만 수신. 남은 오류: 없음.
+  참고(수업 범위 밖): EC2(jjh-bastion-host)에도 App+MariaDB를 올려 task-flow.service로 실행해 봄.
+- [x] T14: Web 서버 Nginx와 정적 파일·/api 프록시 구성.
   확인: Web 주소로 등록, DB 저장, App 재시작 후 유지.
+  기록(2026-10-14): WSL을 Web 서버로 사용(Nginx 1.28.3). deploy/task-flow.nginx.conf(이후 task-flow-web.conf로 이름 변경. 80 포트, root /var/www/task-flow,
+  /api/ → http://127.0.0.1:8000 프록시), deploy/WEB-SERVER.md(설치·git archive로 정적 파일 배포·사이트 설정·확인 절차) 작성.
+  실행: git archive HEAD frontend → /var/www/task-flow, sites-available/task-flow 연결, sites-enabled/default 연결 해제,
+        sudo nginx -t(성공) && sudo systemctl reload nginx. 프런트엔드는 이미 /api를 호출하므로 코드 변경 없음.
+  결과: http://127.0.0.1/ → 200(Task Flow 화면), /api/health → 200. Web 주소로 등록(POST 201, id 5) → DB SELECT로 행 확인.
+  sudo systemctl restart task-flow-api.service(새 PID) 후 /api/tasks에 id 5 유지. /.env → 404. nginx access.log에 요청 기록.
+  설치 전 사용자 권한 임시 Nginx(8088)로 같은 설정 검증: 정적 200, POST 201, 422, /.env·/backend/main.py 404.
+  테스트 행(id 4, 5)은 확인 후 삭제. 남은 오류: 없음. 미확인: App 중지 시 502 표시(sudo 필요로 실행 안 함).
+  추가(2026-10-14, 사용자 요청): 8000은 FastAPI(API·/docs)만 사용. backend/main.py에서 frontend StaticFiles 제공 제거,
+  API-SPEC.md 화면 제공 항목 갱신, App 묶음(APP-SERVER.md·install-wsl.sh)에서 frontend 제외.
+  deploy/task-flow-web.conf(이름 변경), install-wsl.sh(App 설치), install-wsl-web.sh(Web 설치) 추가.
+  확인: 저장소 코드로 uvicorn 8006 실행 시 /·index.html·app.js 404, /api/health·/api/tasks·/docs·/openapi.json 200,
+  등록 201·PATCH 200·삭제 204·빈 제목 422. 스크립트 bash -n 문법 확인.
+  남은 확인: 커밋 후 install-wsl.sh·install-wsl-web.sh 실행(sudo)으로 시스템 반영, 8000 / 404·80 화면 200 확인.
 ## 실행 기준
 T01~T04: python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 T05~T11: 가상환경에서 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload

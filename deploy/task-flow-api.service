@@ -1,0 +1,17 @@
+# Task Flow API를 systemd 서비스로 실행한다. 설치 절차는 deploy/APP-SERVER.md 참고.
+# 코드는 /opt/task-flow, 실행 계정은 task-flow. DB 접속 정보는 /opt/task-flow/.env(권한 600)에서 읽는다.
+[Unit]
+Description=Task Flow API (FastAPI + uvicorn)
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+User=task-flow
+Group=task-flow
+WorkingDirectory=/opt/task-flow
+ExecStart=/opt/task-flow/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
