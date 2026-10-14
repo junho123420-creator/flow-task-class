@@ -103,19 +103,26 @@
   8000: / ·index.html 404, /api/health·/docs 200. 80: / ·app.js 200, /api/health 200.
   80으로 등록 201·PATCH 200·검색 조회·삭제 204·재삭제 404(테스트 행 삭제). 남은 오류: 없음.
 ## 6장: 다중 사용자·팀 (PRD F10~F16)
-- [ ] T15: API-SPEC.md에 인증·팀 API와 할 일 API 변경 사항 작성. 코드 변경 없음.
+- [x] T15: API-SPEC.md에 인증·팀 API와 할 일 API 변경 사항 작성. 코드 변경 없음.
   범위: POST /api/auth/signup·login·logout, GET /api/auth/me, 세션 쿠키 규칙,
   팀: POST /api/teams, GET /api/teams(내가 속한 팀), GET /api/teams/{id}/members, POST /api/teams/{id}/members(아이디로 추가),
   DELETE /api/teams/{id}/members/{user_id}(팀장의 제거 또는 본인 탈퇴),
   할 일 응답의 owner·visibility·team, 목록 scope 필터(all·mine·team_id),
   상태 코드(401 로그인 필요, 403 권한 없음, 404 없음·볼 수 없음, 409 아이디·팀 이름 중복·이미 멤버).
   확인: PRD F10~F16과 API-SPEC 항목이 하나씩 대응한다.
+  기록(2026-10-14): API-SPEC.md에 상태 코드(401·403·409), 세션 쿠키(task_flow_session, HttpOnly·SameSite=Lax·7일 고정, 토큰 해시 저장),
+  인증 API 4개, User·Team·Member 객체, 팀 API 5개, 볼 수 있는 할 일 규칙, Task의 owner·visibility·team, scope·team_id 필터,
+  PATCH·DELETE 권한, PRD 대응표 작성. 기존 할 일 필드 규칙·422 검증·부분 수정 계약은 유지.
+  사용자 결정 반영: 가입 후 자동 로그인 안 함, 세션 7일 고정, 로그인 실패 횟수 제한 제외(PRD 제외 기능), 팀을 떠난 작성자의 TEAM 할 일은 팀에 남음.
+  확인: PRD F10~F16 각각 API-SPEC 대응표 행 존재, 주요 규칙(아이디 형식, 비밀번호 길이, 쿠키 속성, 같은 401, 404/403 구분, 팀장 규칙,
+  작성자 없는 기존 행 미표시) 문구 확인. 남은 오류: 없음.
+  참고: T19에서 할 일 API에 로그인을 적용하면 T20(로그인 화면) 전까지 현재 화면은 401로 목록을 불러오지 못한다.
 - [ ] T16: users·sessions·teams·team_members 테이블 추가, tasks에 owner_id(NULL 허용)·visibility(기본 PRIVATE)·team_id(NULL 허용) 추가.
   기존 테이블·행은 삭제하지 않는다. 변경 전 mysqldump 백업. 변경은 별도 스크립트(backend/migrate_*.py)로 한 번만 적용.
   확인: SHOW CREATE TABLE로 새 열·외래키·인덱스·유일 제약 확인, 기존 행 수 유지, 스크립트 재실행 시 변경 없음.
 - [ ] T17: 회원가입·로그인·로그아웃·내 정보 API. 비밀번호는 hashlib.scrypt, 세션 토큰은 secrets로 발급하고 해시만 저장.
   쿠키: HttpOnly, SameSite=Lax, Path=/, 7일. 새 패키지 없음.
-  확인: 가입 201, 아이디 중복 409, 형식 위반 422, 잘못된 비밀번호와 없는 아이디 모두 같은 401, 로그인 후 me 200,
+  확인: 가입 201(세션 쿠키 없음, 자동 로그인 안 함), 아이디 중복 409, 형식 위반 422, 잘못된 비밀번호와 없는 아이디 모두 같은 401, 로그인 후 me 200,
   로그아웃 후 me 401, DB에 비밀번호·토큰 원문 없음, API 재시작 후 로그인 유지.
 - [ ] T18: 팀 API. 팀 생성(만든 사람이 팀장·멤버), 내 팀 목록, 멤버 목록·추가·제거, 본인 탈퇴.
   확인: 이름 중복 409, 팀장 아닌 사용자의 추가·제거 403, 없는 아이디 404, 중복 추가 409, 팀장 탈퇴·제거 거절,
