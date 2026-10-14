@@ -15,6 +15,11 @@ const PRIORITIES = [
   { value: "LOW", label: "낮음" },
 ];
 const DEFAULT_PRIORITY = "NORMAL";
+const VISIBILITIES = [
+  { value: "PRIVATE", label: "개인" },
+  { value: "TEAM", label: "팀" },
+];
+const TEAM_NAME_MAX_LENGTH = 50;
 const USERNAME_PATTERN = /^[a-z0-9_]{3,30}$/;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
@@ -23,12 +28,18 @@ const ROUTES = {
   "#/login": { view: "login", title: "로그인", needsLogin: false },
   "#/signup": { view: "signup", title: "회원가입", needsLogin: false },
   "#/": { view: "tasks", title: "할 일", needsLogin: true },
+  "#/teams": { view: "teams", title: "팀", needsLogin: true },
 };
 const DEFAULT_ROUTE = "#/";
 const LOGIN_ROUTE = "#/login";
 
 // 로그인한 사용자({id, username}). 로그인하지 않았으면 null.
 let currentUser = null;
+// 내가 속한 팀 목록(GET /api/teams). 할 일의 팀 선택과 범위 필터에 사용한다.
+let myTeams = [];
+// 팀 화면: 팀별 멤버 목록과 팀별 오류 문구.
+let teamDetails = [];
+const teamErrors = new Map();
 
 // 마지막으로 API에서 받은 목록(검색·필터 적용 결과).
 let tasks = [];
@@ -42,7 +53,8 @@ let editError = "";
 // 수정을 시작하거나 수정 오류가 났을 때만 수정 입력칸으로 포커스를 옮긴다.
 let focusEditForm = false;
 // 제목 검색, 상태, 우선순위 필터. 빈 값은 조건 없음이며 API에서 AND로 적용한다.
-const filters = { query: "", status: "", priority: "" };
+// scope: ""(전체), "mine", "team:<id>".
+const filters = { query: "", status: "", priority: "", scope: "" };
 
 const form = document.getElementById("task-form");
 const titleInput = document.getElementById("task-title");
@@ -58,6 +70,18 @@ const priorityFilter = document.getElementById("filter-priority");
 const taskList = document.getElementById("task-list");
 const taskCount = document.getElementById("task-count");
 const emptyMessage = document.getElementById("empty-message");
+const visibilityInput = document.getElementById("task-visibility");
+const teamField = document.getElementById("task-team-field");
+const teamInput = document.getElementById("task-team");
+const noTeamHelp = document.getElementById("no-team-help");
+const scopeFilter = document.getElementById("filter-scope");
+const navLinks = { tasks: document.getElementById("nav-tasks"), teams: document.getElementById("nav-teams") };
+const teamForm = document.getElementById("team-form");
+const teamNameInput = document.getElementById("team-name");
+const teamButton = document.getElementById("team-button");
+const teamError = document.getElementById("team-error");
+const teamsEmpty = document.getElementById("teams-empty");
+const teamList = document.getElementById("team-list");
 const loadingMessage = document.getElementById("loading-message");
 const userBar = document.getElementById("user-bar");
 const currentUsername = document.getElementById("current-username");
@@ -66,6 +90,7 @@ const views = {
   login: document.getElementById("login-view"),
   signup: document.getElementById("signup-view"),
   tasks: document.getElementById("tasks-view"),
+  teams: document.getElementById("teams-view"),
 };
 const loginForm = document.getElementById("login-form");
 const loginUsername = document.getElementById("login-username");
@@ -175,8 +200,21 @@ function validateTaskInput(input) {
     (isValidPriority(input.priority) ? null : "우선순위가 올바르지 않습니다.") ||
     (input.due_date !== null && !isValidDate(input.due_date)
       ? "마감일은 YYYY-MM-DD 형식의 올바른 날짜여야 합니다."
-      : null)
+      : null) ||
+    (input.visibility === "TEAM" && !input.team_id ? "팀을 선택하세요." : null)
   );
+}
+
+// 공개 범위 입력을 API 형식으로 바꾼다. PRIVATE이면 team_id는 null이다.
+function readSharing(visibility, teamId) {
+  return {
+    visibility,
+    team_id: visibility === "TEAM" && teamId !== "" ? Number(teamId) : null,
+  };
+}
+
+function isOwner(task) {
+  return currentUser !== null && task.owner.id === currentUser.id;
 }
 
 // 입력값을 API 요청 형식으로 정리한다. 빈 마감일은 null이다.
@@ -203,7 +241,9 @@ function findTask(id) {
 }
 
 function hasFilters() {
-  return filters.query.trim() !== "" || filters.status !== "" || filters.priority !== "";
+  return (
+    filters.query.trim() !== "" || filters.status !== "" || filters.priority !== "" || filters.scope !== ""
+  );
 }
 
 function listPath() {
@@ -217,6 +257,12 @@ function listPath() {
   }
   if (filters.priority !== "") {
     params.set("priority", filters.priority);
+  }
+  if (filters.scope === "mine") {
+    params.set("scope", "mine");
+  } else if (filters.scope.startsWith("team:")) {
+    params.set("scope", "team");
+    params.set("team_id", filters.scope.slice("team:".length));
   }
   const queryString = params.toString();
   return queryString === "" ? "/tasks" : `/tasks?${queryString}`;
@@ -235,6 +281,13 @@ async function loadTasks() {
     apiError.textContent = "";
   } catch (error) {
     if (requestId !== listRequestId) {
+      return;
+    }
+    if (error.status === 404 && filters.scope.startsWith("team:")) {
+      // 그 사이 팀에서 빠졌으면 범위 필터를 전체로 되돌리고 팀 목록을 새로 받는다.
+      filters.scope = "";
+      await loadMyTeams();
+      await loadTasks();
       return;
     }
     loadFailed = true;
@@ -382,11 +435,34 @@ function createEditForm(task) {
   dueField.value = task.due_date === null ? "" : task.due_date;
   dueField.setAttribute("aria-label", "마감일 수정");
 
-  const save = () =>
-    saveEdit(
-      task.id,
-      readTaskInput(titleField.value, descriptionField.value, priorityField.value, dueField.value)
-    );
+  // 공개 범위와 팀은 작성자만 바꿀 수 있다.
+  const owner = isOwner(task);
+  let visibilityField = null;
+  let teamSelect = null;
+  if (owner) {
+    visibilityField = createSelect(VISIBILITIES, task.visibility, "공개 범위 수정");
+    teamSelect = createTeamSelect(task.team, "팀 수정");
+    teamSelect.hidden = task.visibility !== "TEAM";
+    visibilityField.addEventListener("change", () => {
+      teamSelect.hidden = visibilityField.value !== "TEAM";
+    });
+  }
+
+  const save = () => {
+    const input = readTaskInput(titleField.value, descriptionField.value, priorityField.value, dueField.value);
+    if (owner) {
+      const sharing = readSharing(visibilityField.value, teamSelect.value);
+      const currentTeamId = task.team ? task.team.id : null;
+      // 바뀌었을 때만 보낸다(떠난 팀의 할 일을 그대로 두고 내용만 고칠 수 있게).
+      if (sharing.visibility !== task.visibility || sharing.team_id !== currentTeamId) {
+        Object.assign(input, sharing);
+        if (sharing.visibility === "PRIVATE") {
+          delete input.team_id;
+        }
+      }
+    }
+    saveEdit(task.id, input);
+  };
 
   titleField.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -403,6 +479,10 @@ function createEditForm(task) {
   options.className = "form-row";
   options.appendChild(priorityField);
   options.appendChild(dueField);
+  if (owner) {
+    options.appendChild(visibilityField);
+    options.appendChild(teamSelect);
+  }
   options.appendChild(createButton("저장", save));
   options.appendChild(createButton("취소", cancelEdit));
 
@@ -462,6 +542,14 @@ function createTaskItem(task, today) {
   if (task.due_date !== null) {
     meta.appendChild(createBadge(`마감 ${task.due_date}`, "due"));
   }
+  meta.appendChild(
+    task.visibility === "TEAM" && task.team
+      ? createBadge(`팀 ${task.team.name}`, "team")
+      : createBadge("개인", "private")
+  );
+  if (!isOwner(task)) {
+    meta.appendChild(createBadge(`작성자 ${task.owner.username}`, "owner"));
+  }
   if (isOverdue(task, today)) {
     meta.appendChild(createBadge("지연", "overdue-badge"));
   }
@@ -479,7 +567,10 @@ function createTaskItem(task, today) {
   actions.className = "task-actions";
   actions.appendChild(createStatusSelect(task));
   actions.appendChild(createButton("수정", () => startEdit(task.id)));
-  actions.appendChild(createButton("삭제", () => deleteTask(task.id)));
+  // 삭제는 작성자만 할 수 있다(서버도 403으로 거절한다).
+  if (isOwner(task)) {
+    actions.appendChild(createButton("삭제", () => deleteTask(task.id)));
+  }
 
   main.appendChild(info);
   main.appendChild(actions);
@@ -520,6 +611,8 @@ function resetForm() {
   descriptionInput.value = "";
   priorityInput.value = DEFAULT_PRIORITY;
   dueInput.value = "";
+  visibilityInput.value = "PRIVATE";
+  updateTaskTeamField();
 }
 
 form.addEventListener("submit", async (event) => {
@@ -528,12 +621,10 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  const input = readTaskInput(
-    titleInput.value,
-    descriptionInput.value,
-    priorityInput.value,
-    dueInput.value
-  );
+  const input = {
+    ...readTaskInput(titleInput.value, descriptionInput.value, priorityInput.value, dueInput.value),
+    ...readSharing(visibilityInput.value, teamInput.value),
+  };
   const error = validateTaskInput(input);
   if (error) {
     formError.textContent = error;
@@ -571,6 +662,216 @@ statusFilter.addEventListener("change", () => {
 priorityFilter.addEventListener("change", () => {
   filters.priority = priorityFilter.value;
   loadTasks();
+});
+scopeFilter.addEventListener("change", () => {
+  filters.scope = scopeFilter.value;
+  loadTasks();
+});
+visibilityInput.addEventListener("change", updateTaskTeamField);
+
+// ---- 팀 ----
+
+// 내 팀 목록으로 팀 선택 상자를 만든다. 현재 팀이 내 팀이 아니면(팀을 떠난 작성자) 그 팀도 선택지에 넣는다.
+function createTeamSelect(currentTeam, ariaLabel) {
+  const options = myTeams.map((team) => ({ value: String(team.id), label: team.name }));
+  if (currentTeam && !myTeams.some((team) => team.id === currentTeam.id)) {
+    options.unshift({ value: String(currentTeam.id), label: `${currentTeam.name} (떠난 팀)` });
+  }
+  const select = createSelect(options, currentTeam ? String(currentTeam.id) : "", ariaLabel);
+  if (!currentTeam && options.length > 0) {
+    select.value = options[0].value;
+  }
+  return select;
+}
+
+// 등록 폼: 공개 범위가 팀이면 팀 선택을 보인다. 속한 팀이 없으면 팀을 고를 수 없다.
+function updateTaskTeamField() {
+  const hasTeams = myTeams.length > 0;
+  visibilityInput.querySelector('option[value="TEAM"]').disabled = !hasTeams;
+  if (!hasTeams && visibilityInput.value === "TEAM") {
+    visibilityInput.value = "PRIVATE";
+  }
+  teamField.hidden = visibilityInput.value !== "TEAM";
+  noTeamHelp.hidden = hasTeams;
+}
+
+function fillOptions(select, options, keepValue) {
+  const previous = keepValue ? select.value : "";
+  select.replaceChildren();
+  for (const item of options) {
+    const option = document.createElement("option");
+    option.value = item.value;
+    option.textContent = item.label;
+    select.appendChild(option);
+  }
+  select.value = options.some((item) => item.value === previous) ? previous : options.length ? options[0].value : "";
+}
+
+// 팀 목록이 바뀌면 등록 폼의 팀 선택과 범위 필터의 팀 항목을 다시 만든다.
+function updateTeamSelects() {
+  fillOptions(
+    teamInput,
+    myTeams.map((team) => ({ value: String(team.id), label: team.name })),
+    true
+  );
+  updateTaskTeamField();
+  const scopeOptions = [
+    { value: "", label: "범위 전체" },
+    { value: "mine", label: "내 할 일" },
+    ...myTeams.map((team) => ({ value: `team:${team.id}`, label: `팀: ${team.name}` })),
+  ];
+  scopeFilter.value = filters.scope;
+  fillOptions(scopeFilter, scopeOptions, true);
+  filters.scope = scopeFilter.value;
+}
+
+async function loadMyTeams() {
+  try {
+    myTeams = await request("GET", "/teams");
+  } catch (error) {
+    myTeams = [];
+  }
+  updateTeamSelects();
+}
+
+// 팀 화면: 내 팀과 각 팀의 멤버를 받아 그린다.
+async function loadTeamsView() {
+  try {
+    myTeams = await request("GET", "/teams");
+    teamDetails = await Promise.all(
+      myTeams.map(async (team) => ({ team, members: await request("GET", `/teams/${team.id}/members`) }))
+    );
+    teamError.textContent = "";
+  } catch (error) {
+    teamError.textContent = `팀 목록을 불러오지 못했습니다. ${error.message}`;
+  }
+  updateTeamSelects();
+  renderTeams();
+}
+
+async function runTeamAction(teamId, action) {
+  teamErrors.delete(teamId);
+  try {
+    await action();
+  } catch (error) {
+    teamErrors.set(teamId, error.message);
+  }
+  await loadTeamsView();
+}
+
+function addMember(teamId, username) {
+  if (username === "") {
+    teamErrors.set(teamId, "추가할 아이디를 입력하세요.");
+    renderTeams();
+    return Promise.resolve();
+  }
+  return runTeamAction(teamId, () => request("POST", `/teams/${teamId}/members`, { username }));
+}
+
+function removeMember(team, member) {
+  const self = member.user.id === currentUser.id;
+  const question = self
+    ? `"${team.name}" 팀을 떠날까요? 이 팀의 할 일을 더 이상 볼 수 없습니다.`
+    : `"${member.user.username}"님을 "${team.name}" 팀에서 제거할까요?`;
+  if (!window.confirm(question)) {
+    return Promise.resolve();
+  }
+  return runTeamAction(team.id, () => request("DELETE", `/teams/${team.id}/members/${member.user.id}`));
+}
+
+function createTeamItem({ team, members }) {
+  const item = document.createElement("li");
+  item.dataset.teamId = String(team.id);
+  const amOwner = team.owner.id === currentUser.id;
+
+  const header = document.createElement("div");
+  header.className = "team-header";
+  const name = document.createElement("span");
+  name.className = "team-name";
+  name.textContent = team.name;
+  header.appendChild(name);
+  header.appendChild(createBadge(`팀장 ${team.owner.username}`, "owner"));
+  header.appendChild(createBadge(`멤버 ${members.length}명`, "count"));
+  item.appendChild(header);
+
+  const memberList = document.createElement("ul");
+  memberList.className = "member-list";
+  for (const member of members) {
+    const row = document.createElement("li");
+    const memberName = document.createElement("span");
+    memberName.className = "member-name";
+    memberName.textContent = member.user.username;
+    row.appendChild(memberName);
+    if (member.is_owner) {
+      row.appendChild(createBadge("팀장", "owner"));
+    } else if (member.user.id === currentUser.id) {
+      row.appendChild(createButton("탈퇴", () => removeMember(team, member)));
+    } else if (amOwner) {
+      row.appendChild(createButton("제거", () => removeMember(team, member)));
+    }
+    memberList.appendChild(row);
+  }
+  item.appendChild(memberList);
+
+  // 멤버 추가는 팀장만 할 수 있다.
+  if (amOwner) {
+    const addForm = document.createElement("form");
+    addForm.className = "form-row member-form";
+    addForm.noValidate = true;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "추가할 아이디";
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", `${team.name} 팀에 추가할 아이디`);
+    const button = document.createElement("button");
+    button.type = "submit";
+    button.textContent = "멤버 추가";
+    addForm.appendChild(input);
+    addForm.appendChild(button);
+    addForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      addMember(team.id, input.value.trim());
+    });
+    item.appendChild(addForm);
+  }
+
+  if (teamErrors.has(team.id)) {
+    const error = document.createElement("p");
+    error.className = "form-error";
+    error.setAttribute("role", "alert");
+    error.textContent = teamErrors.get(team.id);
+    item.appendChild(error);
+  }
+  return item;
+}
+
+function renderTeams() {
+  teamList.replaceChildren(...teamDetails.map(createTeamItem));
+  teamsEmpty.hidden = teamDetails.length > 0;
+}
+
+teamForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (teamButton.disabled) {
+    return;
+  }
+  const name = teamNameInput.value.trim();
+  const length = textLength(name);
+  if (length < 1 || length > TEAM_NAME_MAX_LENGTH) {
+    teamError.textContent = `팀 이름은 1~${TEAM_NAME_MAX_LENGTH}자로 입력하세요.`;
+    return;
+  }
+  teamButton.disabled = true;
+  try {
+    await request("POST", "/teams", { name });
+  } catch (requestError) {
+    teamError.textContent = `팀을 만들지 못했습니다. ${requestError.message}`;
+    return;
+  } finally {
+    teamButton.disabled = false;
+  }
+  teamNameInput.value = "";
+  await loadTeamsView();
 });
 
 // ---- 로그인·회원가입과 화면 전환 ----
@@ -613,6 +914,13 @@ function showRoute() {
   document.title = `${route.title} - Task Flow`;
   userBar.hidden = !currentUser;
   currentUsername.textContent = currentUser ? currentUser.username : "";
+  for (const [name, link] of Object.entries(navLinks)) {
+    if (name === route.view) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
 
   if (route.view === "login") {
     loginError.textContent = "";
@@ -621,9 +929,12 @@ function showRoute() {
   } else if (route.view === "signup") {
     signupError.textContent = "";
     signupUsername.focus();
+  } else if (route.view === "teams") {
+    loginNotice.textContent = "";
+    loadTeamsView();
   } else {
     loginNotice.textContent = "";
-    loadTasks();
+    loadMyTeams().then(loadTasks);
   }
 }
 
@@ -639,9 +950,17 @@ function clearUserState() {
   filters.query = "";
   filters.status = "";
   filters.priority = "";
+  filters.scope = "";
   searchInput.value = "";
   statusFilter.value = "";
   priorityFilter.value = "";
+  myTeams = [];
+  teamDetails = [];
+  teamErrors.clear();
+  updateTeamSelects();
+  teamList.replaceChildren();
+  teamNameInput.value = "";
+  teamError.textContent = "";
   resetForm();
   formError.textContent = "";
   apiError.textContent = "";

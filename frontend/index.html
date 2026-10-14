@@ -11,6 +11,10 @@
     <header class="app-header">
       <h1>Task Flow</h1>
       <div id="user-bar" class="user-bar" hidden>
+        <nav class="main-nav" aria-label="메뉴">
+          <a id="nav-tasks" href="#/">할 일</a>
+          <a id="nav-teams" href="#/teams">팀</a>
+        </nav>
         <span id="current-username" class="current-username"></span>
         <button id="logout-button" type="button">로그아웃</button>
       </div>
@@ -64,6 +68,18 @@
         <label for="task-due">마감일</label>
         <input id="task-due" name="due_date" type="date">
       </div>
+      <div class="form-row">
+        <label for="task-visibility">공개 범위</label>
+        <select id="task-visibility" name="visibility">
+          <option value="PRIVATE" selected>개인</option>
+          <option value="TEAM">팀</option>
+        </select>
+        <span id="task-team-field" hidden>
+          <label for="task-team" class="sr-only">팀</label>
+          <select id="task-team" name="team_id"></select>
+        </span>
+        <span id="no-team-help" class="field-help" hidden>팀에 속하면 팀 할 일을 등록할 수 있습니다.</span>
+      </div>
       <label for="task-description" class="sr-only">설명</label>
       <textarea id="task-description" name="description" rows="2" placeholder="설명 (선택, 최대 2000자)"></textarea>
     </form>
@@ -90,12 +106,31 @@
           <option value="NORMAL">보통</option>
           <option value="LOW">낮음</option>
         </select>
+        <label for="filter-scope" class="sr-only">범위 필터</label>
+        <select id="filter-scope">
+          <option value="">범위 전체</option>
+          <option value="mine">내 할 일</option>
+        </select>
       </div>
 
       <p id="empty-message" class="empty-message">등록된 할 일이 없습니다.</p>
       <ul id="task-list" class="task-list"></ul>
     </section>
     </div>
+
+    <section id="teams-view" aria-labelledby="teams-heading" hidden>
+      <h2 id="teams-heading">팀</h2>
+      <form id="team-form" class="task-form" novalidate>
+        <div class="form-row">
+          <label for="team-name" class="sr-only">새 팀 이름</label>
+          <input id="team-name" type="text" placeholder="새 팀 이름 (1~50자)" autocomplete="off">
+          <button id="team-button" type="submit">팀 만들기</button>
+        </div>
+      </form>
+      <p id="team-error" class="form-error" role="alert"></p>
+      <p id="teams-empty" class="empty-message">속한 팀이 없습니다.</p>
+      <ul id="team-list" class="task-list"></ul>
+    </section>
   </main>
 
   <script src="app.js"></script>
