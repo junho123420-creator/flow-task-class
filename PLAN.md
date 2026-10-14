@@ -117,9 +117,24 @@
   확인: PRD F10~F16 각각 API-SPEC 대응표 행 존재, 주요 규칙(아이디 형식, 비밀번호 길이, 쿠키 속성, 같은 401, 404/403 구분, 팀장 규칙,
   작성자 없는 기존 행 미표시) 문구 확인. 남은 오류: 없음.
   참고: T19에서 할 일 API에 로그인을 적용하면 T20(로그인 화면) 전까지 현재 화면은 401로 목록을 불러오지 못한다.
-- [ ] T16: users·sessions·teams·team_members 테이블 추가, tasks에 owner_id(NULL 허용)·visibility(기본 PRIVATE)·team_id(NULL 허용) 추가.
+- [x] T16: users·sessions·teams·team_members 테이블 추가, tasks에 owner_id(NULL 허용)·visibility(기본 PRIVATE)·team_id(NULL 허용) 추가.
   기존 테이블·행은 삭제하지 않는다. 변경 전 mysqldump 백업. 변경은 별도 스크립트(backend/migrate_*.py)로 한 번만 적용.
   확인: SHOW CREATE TABLE로 새 열·외래키·인덱스·유일 제약 확인, 기존 행 수 유지, 스크립트 재실행 시 변경 없음.
+  기록(2026-10-14): backend/models.py(UserRow·SessionRow·TeamRow·TeamMemberRow 추가, TaskRow에 owner_id·visibility·team_id,
+  CHECK ck_tasks_team: PRIVATE↔팀 없음, TEAM↔팀 필수), backend/migrate_multiuser.py(신규), backend/init_db.py(전체 테이블 생성·안내).
+  실행: mariadb-dump(--single-transaction --no-tablespaces)로 ~/backups/task_flow-before-T16-20261014-132528.sql 백업(권한 600, 저장소 밖),
+        python -m backend.migrate_multiuser 2회.
+  결과: 1회차 새 테이블 4개 생성, tasks에 열 3개·외래키 2개·CHECK 1개 적용, 행 수 3 → 3. 2회차 모두 "변경 안 함".
+  SHOW CREATE TABLE: users.username·teams.name·sessions.token_hash UNIQUE, team_members PK(team_id,user_id),
+  sessions·team_members 외래키 ON DELETE CASCADE, tasks fk_tasks_owner·fk_tasks_team·ck_tasks_team.
+  기존 행 id 1·3·10은 owner_id NULL, PRIVATE로 유지.
+  제약 시험(트랜잭션 안에서 실행 후 롤백) 13건: 멤버 중복·아이디 중복·팀 이름 중복(대소문자만 다른 이름 포함) 거절,
+  TEAM+팀 없음·PRIVATE+팀 있음 거절(CHECK), 없는 작성자·없는 팀 거절(FK), 잘못된 visibility 거절, 정상 조합 허용. 시험 후 새 테이블 0행.
+  회귀: 현재 API를 8006에서 실행해 GET 200·POST 201·PATCH 200·422·DELETE 204. 실행 중인 서비스(/opt, 이전 코드) /api/tasks 200 유지.
+  init_db: 새 설치용 DDL에 같은 열·제약 포함 확인, 기존 DB에서는 "이미 있어 변경하지 않았습니다".
+  참고: 시험 중 롤백된 INSERT로 tasks AUTO_INCREMENT가 16 이후로 증가(데이터 영향 없음).
+  참고: 팀 이름은 DB 정렬 규칙(utf8mb4_uca1400_ai_ci)상 대소문자·악센트만 다른 이름도 중복으로 처리된다.
+  참고: T19 전까지 기존 화면·API로 등록한 행은 작성자가 없어(NULL) T19 이후 표시되지 않는다. 남은 오류: 없음.
 - [ ] T17: 회원가입·로그인·로그아웃·내 정보 API. 비밀번호는 hashlib.scrypt, 세션 토큰은 secrets로 발급하고 해시만 저장.
   쿠키: HttpOnly, SameSite=Lax, Path=/, 7일. 새 패키지 없음.
   확인: 가입 201(세션 쿠키 없음, 자동 로그인 안 함), 아이디 중복 409, 형식 위반 422, 잘못된 비밀번호와 없는 아이디 모두 같은 401, 로그인 후 me 200,
